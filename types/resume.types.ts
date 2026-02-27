@@ -11,6 +11,12 @@ export interface Experience {
 }
 
 export interface ParsedResume {
+  name?: string;
+  email?: string;
+  phone?: string;
   education: Education[];
   experience: Experience[];
+  skills?: string[];
+  projects?: string[];
+  certifications?: string[];
 }

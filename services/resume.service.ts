@@ -1,9 +1,7 @@
-// Abstracted resume upload / parsing API - mocked for now. Swap with real backend when ready.
-
-import type { ParsedResume } from "@/types/resume.types";
+import api from "@/lib/api";
+import { AxiosError } from "axios";
+import type { ParsedResume, Education, Experience } from "@/types/resume.types";
 import { MAX_RESUME_SIZE_BYTES } from "@/lib/constants";
-
-const MOCK_DELAY_MS = 800;
 
 export interface UploadResult {
   success: boolean;
@@ -11,7 +9,44 @@ export interface UploadResult {
   data?: ParsedResume;
 }
 
-export async function uploadResume(file: File): Promise<UploadResult> {
+function toEducation(item: unknown): Education {
+  if (typeof item === "string") {
+    return { institution: item };
+  }
+  const d = item as Record<string, string>;
+  return {
+    institution: d.institution ?? d.degree ?? "Unknown",
+    degree: d.degree,
+    dates: d.dates,
+  };
+}
+
+function toExperience(item: unknown): Experience {
+  if (typeof item === "string") {
+    return { company: item };
+  }
+  const d = item as Record<string, string>;
+  return {
+    company: d.company ?? d.role ?? "Unknown",
+    role: d.role,
+    dates: d.dates,
+  };
+}
+
+function mapParsedData(raw: Record<string, unknown>): ParsedResume {
+  return {
+    name: raw.name as string | undefined,
+    email: raw.email as string | undefined,
+    phone: raw.phone as string | undefined,
+    education: ((raw.education as unknown[]) ?? []).map(toEducation),
+    experience: ((raw.experience as unknown[]) ?? []).map(toExperience),
+    skills: raw.skills as string[] | undefined,
+    projects: raw.projects as string[] | undefined,
+    certifications: raw.certifications as string[] | undefined,
+  };
+}
+
+export async function uploadResume(file: File, token: string): Promise<UploadResult> {
   if (file.size > MAX_RESUME_SIZE_BYTES) {
     return {
       success: false,
@@ -20,26 +55,42 @@ export async function uploadResume(file: File): Promise<UploadResult> {
   }
 
   if (file.type !== "application/pdf") {
-    return {
-      success: false,
-      message: "Only PDF files are allowed.",
-    };
+    return { success: false, message: "Only PDF files are allowed." };
   }
 
-  await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
+  const authHeader = { Authorization: `Bearer ${token}` };
+  const uploadedDate = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
-  // Mock parsed resume data for visualization
-  const mockData: ParsedResume = {
-    education: [
-      { institution: "University of Example", degree: "B.S. Computer Science", dates: "2016 - 2020" },
-      { institution: "Example High School", degree: "High School Diploma", dates: "2012 - 2016" },
-    ],
-    experience: [
-      { company: "Tech Corp", role: "Senior Software Engineer", dates: "2022 - Present" },
-      { company: "Startup Inc", role: "Software Engineer", dates: "2020 - 2022" },
-      { company: "Dev Agency", role: "Junior Developer", dates: "2019 - 2020" },
-    ],
-  };
+  try {
+    const formData = new FormData();
+    formData.append("name", file.name.replace(/\.pdf$/i, ""));
+    formData.append("description", `Uploaded on ${uploadedDate}`);
+    formData.append("file", file);
 
-  return { success: true, data: mockData };
+    const uploadResponse = await api.post("/v1/resumes/upload", formData, {
+      headers: { ...authHeader, "Content-Type": "multipart/form-data" },
+    });
+
+    const resumeId: string = uploadResponse.data.data.id;
+
+    const parseResponse = await api.get("/v1/resumes/parse", {
+      params: { resume_id: resumeId },
+      headers: authHeader,
+    });
+
+    const parsedData = mapParsedData(
+      parseResponse.data.data.parsed_data as Record<string, unknown>
+    );
+
+    return { success: true, data: parsedData };
+  } catch (error) {
+    const axiosError = error as AxiosError<{ detail: string }>;
+    const message =
+      axiosError.response?.data?.detail ?? "Upload failed. Please try again.";
+    return { success: false, message };
+  }
 }

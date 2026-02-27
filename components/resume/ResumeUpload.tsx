@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { uploadResume } from "@/services/resume.service";
+import { useAuth } from "@/components/providers/AuthProvider";
 import type { ParsedResume } from "@/types/resume.types";
 import { MAX_RESUME_SIZE_BYTES } from "@/lib/constants";
 
@@ -10,6 +11,7 @@ interface ResumeUploadProps {
 }
 
 export default function ResumeUpload({ onUploadSuccess }: ResumeUploadProps) {
+  const { token } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -71,7 +73,7 @@ export default function ResumeUpload({ onUploadSuccess }: ResumeUploadProps) {
     setLoading(true);
 
     try {
-      const result = await uploadResume(file);
+      const result = await uploadResume(file, token ?? "");
 
       if (result.success && result.data) {
         onUploadSuccess(result.data);
