@@ -1,6 +1,5 @@
-// Abstracted auth API - mocked for now. Swap with real backend when ready.
-
-const MOCK_DELAY_MS = 500;
+import api from "@/lib/api";
+import { AxiosError } from "axios";
 
 export interface LoginCredentials {
   email: string;
@@ -15,32 +14,57 @@ export interface AuthResult {
   success: boolean;
   message?: string;
   token?: string;
+  refreshToken?: string;
 }
 
 export async function login(credentials: LoginCredentials): Promise<AuthResult> {
-  await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
+  try {
+    const response = await api.post("/v1/login", {
+      email: credentials.email,
+      password: credentials.password,
+    });
 
-  // Mock: accept any non-empty email/password
-  if (credentials.email && credentials.password) {
-    const mockToken = `mock-token-${Date.now()}`;
-    return { success: true, token: mockToken };
+    const { access_token, refresh_token } = response.data.data;
+    return { success: true, token: access_token, refreshToken: refresh_token };
+  } catch (error) {
+    const axiosError = error as AxiosError<{ detail: string }>;
+    const message =
+      axiosError.response?.data?.detail ?? "Invalid email or password";
+    return { success: false, message };
   }
-
-  return { success: false, message: "Email and password are required" };
 }
 
 export async function signup(credentials: SignupCredentials): Promise<AuthResult> {
-  await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
+  try {
+    const response = await api.post("/v1/register", {
+      email: credentials.email,
+      name: credentials.fullName,
+      password: credentials.password,
+    });
 
-  // Mock: accept any non-empty credentials
-  if (credentials.email && credentials.password && credentials.fullName) {
-    const mockToken = `mock-token-${Date.now()}`;
-    return { success: true, token: mockToken };
+    const { access_token, refresh_token } = response.data.data;
+    return { success: true, token: access_token, refreshToken: refresh_token };
+  } catch (error) {
+    const axiosError = error as AxiosError<{ detail: string }>;
+    const message =
+      axiosError.response?.data?.detail ?? "Registration failed";
+    return { success: false, message };
   }
-
-  return { success: false, message: "All fields are required" };
 }
 
-export function logout(): void {
-  // Clear token from storage when backend is integrated
+export async function logout(token: string): Promise<void> {
+  try {
+    await api.post(
+      "/v1/logout",
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+  } catch {
+    // JWT is stateless — proceed with local cleanup regardless
+  } finally {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("careervista-auth-token");
+      localStorage.removeItem("careervista-refresh-token");
+    }
+  }
 }

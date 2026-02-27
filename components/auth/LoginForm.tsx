@@ -23,7 +23,7 @@ export default function LoginForm() {
       const result = await login({ email, password });
 
       if (result.success && result.token) {
-        setAuth(result.token);
+        setAuth(result.token, result.refreshToken);
         router.push("/dashboard");
         router.refresh();
       } else {

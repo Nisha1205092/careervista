@@ -24,7 +24,7 @@ export default function SignupForm() {
       const result = await signup({ fullName, email, password });
 
       if (result.success && result.token) {
-        setAuth(result.token);
+        setAuth(result.token, result.refreshToken);
         router.push("/dashboard");
         router.refresh();
       } else {

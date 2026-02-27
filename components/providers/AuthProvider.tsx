@@ -7,17 +7,19 @@ import React, {
   useCallback,
   useEffect,
 } from "react";
+import { logout as logoutService } from "@/services/auth.service";
 
 interface AuthContextType {
   isAuthenticated: boolean;
   token: string | null;
-  login: (token: string) => void;
+  login: (token: string, refreshToken?: string) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const AUTH_TOKEN_KEY = "careervista-auth-token";
+const REFRESH_TOKEN_KEY = "careervista-refresh-token";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Group token + mounted into a single state object to avoid multiple
@@ -41,19 +43,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     Promise.resolve().then(() => setState({ token: stored, mounted: true }));
   }, []);
 
-  const login = useCallback((newToken: string) => {
+  const login = useCallback((newToken: string, refreshToken?: string) => {
     setState((prev) => ({ ...prev, token: newToken }));
     if (typeof window !== "undefined") {
       localStorage.setItem(AUTH_TOKEN_KEY, newToken);
+      if (refreshToken) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      }
     }
   }, []);
 
   const logout = useCallback(() => {
+    const currentToken = state.token;
     setState((prev) => ({ ...prev, token: null }));
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+    if (currentToken) {
+      logoutService(currentToken);
     }
-  }, []);
+  }, [state.token]);
 
   if (!state.mounted) {
     return null;
